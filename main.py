@@ -195,7 +195,7 @@ else:
             df = pd.read_excel(file)
         df = clean_df(df)
 
-        st.write("📑 Data Preview", df.head())
+        st.write("📑 Data Preview", df)
 
         # Step 1: Select filter columns
         filter_columns = st.multiselect("Select column(s) to filter", df.columns, key="file_filter_columns")
@@ -273,28 +273,86 @@ def explain_column(df, column_name):
 
                             return "\n".join(explanation)
                             
-uploaded_file = st.file_uploader(
-                                    "Upload your CSV file",
-                                    type=["csv"],
-                                    key="explain_column_uploader"
-                                )
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-    st.success("CSV loaded successfully!")
 
-    selected_col = st.selectbox(
-        "Select a column to explain:",
-        df.columns,
-        key="explain_column_selectbox"
-    )
+if file is not None:
+    try:
+        # Reset file pointer to start
+        file.seek(0)
 
-    if st.button("Explain Column", key="explain_column_button"):
-        explanation = explain_column(df, selected_col)
-        st.text_area(
-            "Column Explanation:",
-            explanation,
-            height=250,
-            key="explain_column_output"
+        # Try reading as CSV
+        df = pd.read_csv(file)
+
+        if df.empty or df.shape[1] == 0:
+            st.error("Uploaded file has no columns or is empty.")
+            st.stop()
+
+        st.success("File loaded successfully!")
+
+        # Column explanation
+        selected_col = st.selectbox(
+            "Select a column to explain:",
+            df.columns,
+            key="explain_column_selectbox"
         )
-else:
-    st.info("Please upload a CSV file to get started.")
+
+        if st.button("Explain Column", key="explain_column_button"):
+            explanation = explain_column(df, selected_col)
+            st.text_area(
+                "Column Explanation:",
+                explanation,
+                height=250,
+                key="explain_column_output"
+            )
+
+    except Exception as e:
+        st.error(f"Failed to read file: {e}")
+
+st.subheader("DataBuddy – Dataset Diff Viewer")
+
+    # Upload datasets
+file1 = st.file_uploader("Upload Original Dataset", type=["csv", "xlsx"], key="diff_file1")
+file2 = st.file_uploader("Upload Updated Dataset", type=["csv", "xlsx"], key="diff_file2")
+if file1 and file2:
+        # Read files
+        df1 = pd.read_csv(file1) if file1.name.endswith(".csv") else pd.read_excel(file1)
+        df2 = pd.read_csv(file2) if file2.name.endswith(".csv") else pd.read_excel(file2)
+
+        # Ensure same columns (use intersection)
+        common_cols = df1.columns.intersection(df2.columns)
+        df1_common = df1[common_cols]
+        df2_common = df2[common_cols]
+
+        # Reset index for row-wise comparison
+        df1_common = df1_common.reset_index(drop=True)
+        df2_common = df2_common.reset_index(drop=True)
+
+        # ----- CHANGED ROWS -----
+        changed_mask = (df1_common != df2_common).any(axis=1)
+        changed_rows_old = df1_common[changed_mask]
+        changed_rows_new = df2_common[changed_mask]
+
+        st.write("### 🔹 Changed Rows")
+        if not changed_rows_old.empty:
+            comparison = pd.concat([changed_rows_old.add_suffix(" (Old)"), 
+                                    changed_rows_new.add_suffix(" (New)")], axis=1)
+            st.dataframe(comparison)
+        else:
+            st.write("No changed rows detected!")
+
+        # ----- ADDED ROWS -----
+        added_mask = ~df2_common.apply(tuple, 1).isin(df1_common.apply(tuple, 1))
+        added_rows = df2_common[added_mask]
+        st.write("### ➕ Added Rows")
+        if not added_rows.empty:
+            st.dataframe(added_rows)
+        else:
+            st.write("No added rows!")
+
+        # ----- REMOVED ROWS -----
+        removed_mask = ~df1_common.apply(tuple, 1).isin(df2_common.apply(tuple, 1))
+        removed_rows = df1_common[removed_mask]
+        st.write("### ➖ Removed Rows")
+        if not removed_rows.empty:
+            st.dataframe(removed_rows)
+        else:
+            st.write("No removed rows!")
