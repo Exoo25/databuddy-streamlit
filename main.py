@@ -227,7 +227,6 @@ else:
                 chart_type = st.selectbox("Choose Chart Type", ["Bar", "Line", "Area", "Pie"], key="chart_file")
                 if st.button("Generate Chart (File)"):
                     fig = make_chart(pivot, rows, cols, values, chart_type)
-st.subheader("DataBuddy - Explain Column")
 
                         # Function to explain a column
 def explain_column(df, column_name):
